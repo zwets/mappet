@@ -21,3 +21,27 @@ This is what `mappet` does.
 
 Mappet is self-contained.  Use `mappet --help`.
 
+**Tip:** by default, `mappet` outputs only the resulting consensus FASTA
+sequence.  Use option `--keep` to retain the intermediate SAM and VCF files.
+
+
+## Requirements
+
+`mappet` requires `bwa`, `samtools`, `bcftools`, `fastq_to_fasta`, and
+`fastq-unbreak` to be on the PATH, and `vcfutils.pl` to be in
+`/usr/share/samtools` (this is where it is on Ubuntu).
+
+On Ubuntu (16.04) these executables can be obtained by:
+
+```bash
+# Install distro packages with all tools except fastq-unbreak
+sudo apt-get install bwa samtools fastx-toolkit
+
+# Install fastq-unbreak
+sudo apt-get install build-essential git # for make and c++ compiler
+git clone 'https://github.com/zwets/fastq-utils.git'
+cd fastq-utils
+make fastq-unbreak
+cp fastq-unbreak $HOME/bin  # Assuming you have ~/bin on your path
+```
+

@@ -140,7 +140,7 @@ fi
 
 # Check availability of the tools
 
-for P in bwa samtools; do # picard-tools gatk; do
+for P in bwa samtools bcftools /usr/share/samtools/vcfutils.pl fastq-unbreak fastq_to_fasta; do # picard-tools gatk; do
     which "$P" > /dev/null || err_exit "required program not present: $P"
 done
 

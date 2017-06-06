@@ -27,8 +27,8 @@ sequence.  Use option `--keep` to retain the intermediate SAM and VCF files.
 
 ## Requirements
 
-`mappet` requires `bwa`, `samtools`, `bcftools`, `fastq_to_fasta`, and
-`fastq-unbreak` to be on the PATH, and `vcfutils.pl` to be in
+`mappet` requires `zgrep`, `bwa`, `samtools`, `bcftools`, `fastq_to_fasta`,
+and `fastq-unbreak` to be on the PATH, and `vcfutils.pl` to be in
 `/usr/share/samtools` (this is where it is on Ubuntu).
 
 On Ubuntu (16.04) these executables can be obtained by:

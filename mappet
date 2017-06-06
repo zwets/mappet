@@ -41,7 +41,7 @@ err_exit() {
 
 # Function to cleanup at exit, trapped on EXIT
 cleanup() {
-    [ -n "$KEEP" ] || [ ! -d "$OUTDIR" ] || {
+    [ -n "$KEEP" ] || [ -z "$OUTDIR" ] || [ ! -d "$OUTDIR" ] || {
         emit "clean up, remove $OUTDIR"
         rm -rf "$OUTDIR"
         }
@@ -49,6 +49,7 @@ cleanup() {
 }
 
 # Function either unzips file $1 to $2 or links to original
+# Note that gzip need not be decompressed for zgrep or samtools
 unzip_or_link() {
     local FT="$(file --mime-type "$1")"
     if [ "$FT" = "$1: application/x-xz" ]; then
@@ -68,13 +69,13 @@ Usage: $(basename $0) [OPTIONS] TARGET READS1 READS2
   Extract from paired-end READS the section matching TARGET.
   
   TARGET is a FASTA file containing a single sequence.  READS1 and READS2
-  are FASTQ files with paired-end reads, optionally (g|x)zipped.  Writes
-  to stdout the FASTA consensus sequence resulting from mapping the READS
-  on TARGET.
+  are FASTQ files with paired-end reads.  All files may optionally be
+  xz or gzip compressed. Writes to stdout the FASTA consensus sequence
+  resulting from mapping the READS on TARGET.
 
   OPTIONS
    -k, --keep        Keep intermediate output (BAM, VCF, FASTQ)
-   -o, --outdir DIR  Directory for output (default ./mappet, implies --keep)
+   -o, --outdir DIR  Directory for output (default ./mappet.out, implies --keep)
    -f, --force       Overwrite existing output files in DIR
    -v, --verbose     Emit progress messages to standard error
 
@@ -94,12 +95,12 @@ while [ $# -ne 0 -a "$(expr "$1" : '\(.[0-9]*\).*')" = "-" ]; do
         KEEP=1
         ;;
     --outdir=*)
-        OUTDIR=${1#--outdir=}
+        OUTDIR="${1#--outdir=}"
         KEEP=1
         ;;
     -o|--outdir)
         shift
-        OUTDIR=$1
+        OUTDIR="$1"
         KEEP=1
         ;;
     -f|--force)
@@ -126,7 +127,7 @@ READS1_FILE="$(realpath -e "$2" || err_exit "file not found: $2")"
 READS2_FILE="$(realpath -e "$3" || err_exit "file not found: $3")"
 shift 3
 
-[ $(grep '^>' "$TARGET_FILE" | wc -l) -eq 1 ] || err_exit "file must have one sequence: $TARGET_FILE"
+[ $(zgrep '^>' "$TARGET_FILE" | wc -l) -eq 1 ] || err_exit "file must have one sequence: $TARGET_FILE"
 
 if [ -z "$OUTDIR" ]; then
     if [ -n "$KEEP" ]; then
@@ -140,7 +141,7 @@ fi
 
 # Check availability of the tools
 
-for P in bwa samtools bcftools /usr/share/samtools/vcfutils.pl fastq-unbreak fastq_to_fasta; do # picard-tools gatk; do
+for P in zgrep bwa samtools bcftools /usr/share/samtools/vcfutils.pl fastq-unbreak fastq_to_fasta; do # picard-tools gatk; do
     which "$P" > /dev/null || err_exit "required program not present: $P"
 done
 
@@ -210,5 +211,7 @@ bcftools view -cg -s 'samples.list' -P 'prior.afs' - > 'result.vcf' 2> 'posterio
 fastq-unbreak | 
 tee 'result.fastq' |
 fastq_to_fasta -n -o 'result.fasta'
+
+RETVAL=0
 
 # vim: sts=4:sw=4:ai:si:et:

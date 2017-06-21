@@ -89,7 +89,7 @@ Usage: $(basename $0) [OPTIONS] TARGET READS1 READS2
 # Parse options
 
 unset KEEP OUTDIR FORCE VERBOSE
-while [ $# -ne 0 -a "$(expr "$1" : '\(.[0-9]*\).*')" = "-" ]; do
+while [ $# -ne 0 -a "$(expr "$1" : '\(.\).*')" = "-" ]; do
     case $1 in
     -k|--keep)
         KEEP=1

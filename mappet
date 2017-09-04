@@ -141,9 +141,12 @@ fi
 
 # Check availability of the tools
 
-for P in zgrep bwa samtools bcftools /usr/share/samtools/vcfutils.pl fastq-unbreak fastq-to-fasta; do # picard-tools gatk; do
+for P in zgrep bwa samtools bcftools fastq-unbreak fastq-to-fasta; do # picard-tools gatk; do
     which "$P" > /dev/null || err_exit "required program not present: $P"
 done
+
+VCFUTILS_PL=$(which vcfutils.pl) || VCFUTILS_PL="/usr/share/samtools/vcfutils.pl" || true
+[ -x "$VCFUTILS_PL" ] || err_exit "required script not found: vcfutils.pl"
 
 # Make and change to OUTDIR
 
@@ -207,7 +210,7 @@ emit "calling variants"
 samtools mpileup -E -uf 'target.fa' 'mapping.bam' | 
 bcftools view -cg -s 'samples.list' -P 'prior.afs' - > 'result.vcf' 2> 'posterior.afs'
 
-/usr/share/samtools/vcfutils.pl vcf2fq 'result.vcf' | 
+$VCFUTILS_PL vcf2fq 'result.vcf' |
 fastq-unbreak | 
 tee 'result.fastq' |
 fastq-to-fasta > 'result.fasta'

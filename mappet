@@ -61,6 +61,16 @@ unzip_or_link() {
     fi
 }
 
+# Wrapper to isolate from the breaking option change to samtools
+# Reads from stdin, writes to file $1
+samtools_sort_into() {
+    if samtools --version-only >/dev/null 2>&1; then # new version, probably
+        samtools sort -@ $(nproc) -o "$1"
+    else
+        samtools sort -@ $(nproc) -f - "$1"
+    fi
+}
+
 # Function to show usage information and exit
 usage_exit() {
     echo "
@@ -172,8 +182,8 @@ bwa index 'target.fa'
 emit "mapping reads on target"
 bwa mem -R "@RG\tID:FLOWCELL1.LANE1\tPL:ILLUMINA\tLB:mappet\tSM:sample" -t $(nproc) 'target.fa' 'reads1.fq' 'reads2.fq' |
 samtools view -bS -F 0x04 - |
-samtools sort -@ $(nproc) -f - 'mapping.bam'
-#samtools sort -@ $(nproc) -f - 'mapping.prededupe.bam'
+samtools_sort_into 'mapping.bam'
+#samtools_sort_into 'mapping.prededupe.bam'
 
 #emit "marking duplicates"
 #picard-tools MarkDuplicates M='dup-metrics.txt' I='mapping.prededupe.bam' O='mapping.bam'

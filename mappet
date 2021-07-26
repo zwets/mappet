@@ -48,19 +48,6 @@ cleanup() {
     exit $RETVAL
 }
 
-# Function either unzips file $1 to $2 or links to original
-# Note that gzip need not be decompressed for zgrep or samtools
-unzip_or_link() {
-    local FT="$(file --mime-type "$1")"
-    if [ "$FT" = "$1: application/x-xz" ]; then
-        emit "unxzipping $1"
-        xz -dc "$1" >"$2"
-    else
-        emit "linking $1"
-        ln -sf "$1" "$2"
-    fi
-}
-
 # Wrapper to isolate from the breaking option change to samtools
 # Reads from stdin, writes to file $1
 samtools_sort_into() {
@@ -77,11 +64,13 @@ usage_exit() {
 Usage: $(basename $0) [OPTIONS] TARGET READS1 READS2
 
   Extract from paired-end READS the section matching TARGET.
-  
+ 
   TARGET is a FASTA file containing a single sequence.  READS1 and READS2
-  are FASTQ files with paired-end reads.  All files may optionally be
-  xz or gzip compressed. Writes to stdout the FASTA consensus sequence
-  resulting from mapping the READS on TARGET.
+  are FASTQ files with paired-end reads.  All files may optionally be gzip
+  compressed.
+
+  Writes to stdout the FASTA consensus sequence resulting from mapping the
+  READS on TARGET.
 
   OPTIONS
    -k, --keep        Keep intermediate output (BAM, VCF, FASTQ)
@@ -89,9 +78,8 @@ Usage: $(basename $0) [OPTIONS] TARGET READS1 READS2
    -f, --force       Overwrite existing output files in DIR
    -v, --verbose     Emit progress messages to standard error
 
-  Assumes the organism is haploid.  Contrary to what happens in 'standard'
-  base calling, the consensus sequence is drawn ONLY from the READS.  TARGET
-  guides the positioning of the reads but contributes no base content.
+  Assumes the organism is haploid.  The consensus sequence is drawn only from
+  the READS; TARGET contributes no base content.
 "
     exit ${1:-1}
 }
@@ -134,45 +122,31 @@ fi
 [ ! -d "$OUTDIR" ] || [ -n "$FORCE" ] || err_exit "directory exists (--force to overwrite): $OUTDIR"
 
 # Check availability of the tools
-
 for P in zgrep bwa samtools bcftools tabix; do # picard-tools gatk fastq-unbreak fastq-to-fasta; do
     which "$P" > /dev/null || err_exit "required program not present: $P"
 done
 
-#VCFUTILS_PL=$(which vcfutils.pl) || VCFUTILS_PL="/usr/share/samtools/vcfutils.pl" || true
-#[ -x "$VCFUTILS_PL" ] || err_exit "required script not found: vcfutils.pl"
-
 # Make and change to OUTDIR
-
 emit "creating working directory: $OUTDIR"
 mkdir -p "$OUTDIR"
-
-ORIG_PWD="$PWD"
 cd "$OUTDIR"
 
-# Pull in (links to) the input files
+# Unzip reference, bwa index choke on gzip
+(gzip -dc "$TARGET_FILE" 2>/dev/null || cat "$TARGET_FILE") >'target.fa'
 
-unzip_or_link "$TARGET_FILE" 'target.fa'
-unzip_or_link "$READS1_FILE" 'reads1.fq'
-unzip_or_link "$READS2_FILE" 'reads2.fq'
+# Link in the reads, bwa mem is cool with gzipped
+ln -sfT "$READS1_FILE" 'reads1.fq'
+ln -sfT "$READS2_FILE" 'reads2.fq'
+
+# Do the thing
 
 emit "bwa indexing the target file"
 bwa index 'target.fa'
 
-#emit "creating dictionary"
-#rm -f target.dict 
-#picard-tools CreateSequenceDictionary REFERENCE=target.fasta
-
 emit "mapping reads on target"
-#bwa mem -R "@RG\tID:FLOWCELL1.LANE1\tPL:ILLUMINA\tLB:mappet\tSM:sample" -t $(nproc) 'target.fa' 'reads1.fq' 'reads2.fq' |
 bwa mem -t $(nproc) 'target.fa' 'reads1.fq' 'reads2.fq' |
 samtools view -bS -F 0x04 - |
 samtools_sort_into 'mapping.bam'
-#samtools_sort_into 'mapping.prededupe.bam'
-
-#emit "marking duplicates"
-#picard-tools MarkDuplicates M='dup-metrics.txt' I='mapping.prededupe.bam' O='mapping.bam'
-#rm mapping.prededupe.bam
 
 emit "indexing the target file"
 samtools faidx 'target.fa'
@@ -180,43 +154,14 @@ samtools faidx 'target.fa'
 emit "indexing bam file"
 samtools index 'mapping.bam'
 
-## Using gatk
-## java -jar GenomeAnalysisTK.jar -R hg19.fa -T HaplotypeCaller -I sample.bam -o sample.vcf
-## Look at its GVCF mode, in particular NON-REF allele and non-reference confidence model
-## java -jar GenomeAnalysisTK.jar -R hg19.fa -T FastaAlternateReferenceMaker -o sample.fa --variant sample.vcf
-
-#emit "create realignment targets"
-#gatk -T RealignerTargetCreator -R target.fa -I mapping.bam -o targetintervals.list
-#emit "perform indel realignment"
-##gatk -T IndelRealigner -R PA01.fna -I mapping.bam -targetIntervals targetintervals.list -o realigned.bam
-#gatk -T IndelRealigner -R target.fa -I mapping.bam -targetIntervals targetintervals.list -o realigned.bam
-#emit "call variants"
-#gatk -T HaplotypeCaller -R target.fa -I realigned.bam -ploidy 1 -stand_call_conf 30 -o raw.vcf
-
-#emit "call variants"
-#gatk -T HaplotypeCaller -R target.fa -I mapping.bam -ploidy 1 -stand_call_conf 30 -o raw.vcf
-#gatk -T HaplotypeCaller -R target.fa -I mapping.bam -newQual -stand_call_conf 20 -ploidy 1 -o gatk.vcf
-
-#emit "making sample and priors file"
-#printf "sample\t1\n" > 'samples.list'
-#printf "[afs] 0:1 1:1000000\n" > 'prior.afs'
-
 emit "calling variants"
-#samtools mpileup -uf 'target.fa' 'mapping.bam' | 
-#bcftools call -c -Ou --ploidy 1 >result.vcf
-#bcftools call -Ou --ploidy 1 -mv  >result.vcf
-#bcftools call -c - > 'result.vcf' 2> 'posterior.afs'
-#
-#$VCFUTILS_PL vcf2fq 'result.vcf' |
-#fastq-unbreak | 
-#tee 'result.fastq' |
-#fastq-to-fasta > 'result.fasta'
+bcftools mpileup -Ou -f target.fa mapping.bam 2>>err.log |
+bcftools call -m --ploidy 1 -P 0.01 -Oz -o result.vcf.gz
 
-bcftools mpileup -Ou -f target.fa mapping.bam |
-bcftools call -m --ploidy 1 -Oz -o result.vcf.gz
+emit "calling consensus"
 tabix result.vcf.gz
-
-cat target.fa | bcftools consensus result.vcf.gz | tee result.fa
+cat target.fa | bcftools consensus result.vcf.gz |
+tee result.fa
 
 RETVAL=0
 

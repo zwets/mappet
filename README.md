@@ -1,6 +1,6 @@
 # mappet - mapped alignment excision tool (gene-cutter on steroids)
 
-Extract from a set of reads their mapping on a template sequence. 
+Extract from a set of reads their mapping on a template sequence.
 
 Homed at <https://github.com/zwets/mappet>.
 
@@ -27,21 +27,10 @@ sequence.  Use option `--keep` to retain the intermediate SAM and VCF files.
 
 ## Requirements
 
-`mappet` requires `zgrep`, `bwa`, `samtools`, `bcftools`, `fastq_to_fasta`,
-and `fastq-unbreak` to be on the PATH, and `vcfutils.pl` to be in
-`/usr/share/samtools` (this is where it is on Ubuntu).
+`mappet` requires `zgrep`, `bwa`, `samtools`, `bcftools` on the PATH, and
+will check that these are available.
 
-On Ubuntu (16.04) these executables can be obtained by:
+On Ubuntu these executables can be installed the usual way:
 
-```bash
-# Install distro packages with all tools except fastq-unbreak
-sudo apt-get install bwa samtools fastx-toolkit
-
-# Install fastq-unbreak
-sudo apt-get install build-essential git # for make and c++ compiler
-git clone 'https://github.com/zwets/fastq-utils.git'
-cd fastq-utils
-make fastq-unbreak
-cp fastq-unbreak $HOME/bin  # Assuming you have ~/bin on your path
-```
+    sudo apt-get install bwa samtools bcftools gzip
 

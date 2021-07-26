@@ -101,29 +101,13 @@ Usage: $(basename $0) [OPTIONS] TARGET READS1 READS2
 unset KEEP OUTDIR FORCE VERBOSE
 while [ $# -ne 0 -a "$(expr "$1" : '\(.\).*')" = "-" ]; do
     case $1 in
-    -k|--keep)
-        KEEP=1
-        ;;
-    --outdir=*)
-        OUTDIR="${1#--outdir=}"
-        KEEP=1
-        ;;
-    -o|--outdir)
-        shift
-        OUTDIR="$1"
-        KEEP=1
-        ;;
-    -f|--force)
-        FORCE=1
-        ;;
-    -v|--verbose)
-        VERBOSE=1
-        ;;
-    -h|--help)
-        usage_exit 0
-        ;;
-    *) usage_exit
-        ;;
+    -k|--keep) KEEP=1 ;;
+    --outdir=*) OUTDIR="${1#--outdir=}"; KEEP=1 ;;
+    -o|--outdir) shift || usage_exit; OUTDIR="$1"; KEEP=1 ;;
+    -f|--force) FORCE=1 ;;
+    -v|--verbose) VERBOSE=1 ;;
+    -h|--help) usage_exit 0 ;;
+    *) usage_exit ;;
     esac
     shift
 done
@@ -151,12 +135,12 @@ fi
 
 # Check availability of the tools
 
-for P in zgrep bwa samtools bcftools fastq-unbreak fastq-to-fasta; do # picard-tools gatk; do
+for P in zgrep bwa samtools bcftools tabix; do # picard-tools gatk fastq-unbreak fastq-to-fasta; do
     which "$P" > /dev/null || err_exit "required program not present: $P"
 done
 
-VCFUTILS_PL=$(which vcfutils.pl) || VCFUTILS_PL="/usr/share/samtools/vcfutils.pl" || true
-[ -x "$VCFUTILS_PL" ] || err_exit "required script not found: vcfutils.pl"
+#VCFUTILS_PL=$(which vcfutils.pl) || VCFUTILS_PL="/usr/share/samtools/vcfutils.pl" || true
+#[ -x "$VCFUTILS_PL" ] || err_exit "required script not found: vcfutils.pl"
 
 # Make and change to OUTDIR
 
@@ -180,7 +164,8 @@ bwa index 'target.fa'
 #picard-tools CreateSequenceDictionary REFERENCE=target.fasta
 
 emit "mapping reads on target"
-bwa mem -R "@RG\tID:FLOWCELL1.LANE1\tPL:ILLUMINA\tLB:mappet\tSM:sample" -t $(nproc) 'target.fa' 'reads1.fq' 'reads2.fq' |
+#bwa mem -R "@RG\tID:FLOWCELL1.LANE1\tPL:ILLUMINA\tLB:mappet\tSM:sample" -t $(nproc) 'target.fa' 'reads1.fq' 'reads2.fq' |
+bwa mem -t $(nproc) 'target.fa' 'reads1.fq' 'reads2.fq' |
 samtools view -bS -F 0x04 - |
 samtools_sort_into 'mapping.bam'
 #samtools_sort_into 'mapping.prededupe.bam'
@@ -212,18 +197,26 @@ samtools index 'mapping.bam'
 #gatk -T HaplotypeCaller -R target.fa -I mapping.bam -ploidy 1 -stand_call_conf 30 -o raw.vcf
 #gatk -T HaplotypeCaller -R target.fa -I mapping.bam -newQual -stand_call_conf 20 -ploidy 1 -o gatk.vcf
 
-emit "making sample and priors file"
-printf "sample\t1\n" > 'samples.list'
-printf "[afs] 0:1 1:1000000\n" > 'prior.afs'
+#emit "making sample and priors file"
+#printf "sample\t1\n" > 'samples.list'
+#printf "[afs] 0:1 1:1000000\n" > 'prior.afs'
 
 emit "calling variants"
-samtools mpileup -E -uf 'target.fa' 'mapping.bam' | 
-bcftools view -cg -s 'samples.list' -P 'prior.afs' - > 'result.vcf' 2> 'posterior.afs'
+#samtools mpileup -uf 'target.fa' 'mapping.bam' | 
+#bcftools call -c -Ou --ploidy 1 >result.vcf
+#bcftools call -Ou --ploidy 1 -mv  >result.vcf
+#bcftools call -c - > 'result.vcf' 2> 'posterior.afs'
+#
+#$VCFUTILS_PL vcf2fq 'result.vcf' |
+#fastq-unbreak | 
+#tee 'result.fastq' |
+#fastq-to-fasta > 'result.fasta'
 
-$VCFUTILS_PL vcf2fq 'result.vcf' |
-fastq-unbreak | 
-tee 'result.fastq' |
-fastq-to-fasta > 'result.fasta'
+bcftools mpileup -Ou -f target.fa mapping.bam |
+bcftools call -m --ploidy 1 -Oz -o result.vcf.gz
+tabix result.vcf.gz
+
+cat target.fa | bcftools consensus result.vcf.gz | tee result.fa
 
 RETVAL=0
 
